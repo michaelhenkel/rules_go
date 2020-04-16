@@ -16,6 +16,7 @@ package cmdline_test
 
 import (
 	"errors"
+	"os"
 	"os/exec"
 	"testing"
 
@@ -84,8 +85,10 @@ const Does Not = Compile
 // TestRace checks that the --@io_bazel_rules_go//go/config:race flag controls
 // whether a target is built in race mode.
 func TestRace(t *testing.T) {
+	t.Logf("PATH=%s", os.Getenv("PATH"))
+
 	// The test should not build unless it's in race mode.
-	err := bazel_testing.RunBazel("test", "//:racy_test")
+	err := bazel_testing.RunBazel("test", "-s", "//:racy_test")
 	if err == nil {
 		t.Fatal("running //:racy_test without flag: unexpected success")
 	}
@@ -98,7 +101,7 @@ func TestRace(t *testing.T) {
 	}
 
 	// The test should fail in race mode.
-	err = bazel_testing.RunBazel("test", "--@io_bazel_rules_go//go/config:race", "//:racy_test")
+	err = bazel_testing.RunBazel("test", "-s", "--@io_bazel_rules_go//go/config:race", "//:racy_test")
 	if err == nil {
 		t.Fatal("running //:racy_test with flag: unexpected success")
 	}
