@@ -15,9 +15,7 @@
 package cmdline_test
 
 import (
-	"errors"
-	"os"
-	"os/exec"
+	"bytes"
 	"testing"
 
 	"github.com/bazelbuild/rules_go/go/tools/bazel_testing"
@@ -27,88 +25,60 @@ func TestMain(m *testing.M) {
 	bazel_testing.TestMain(m, bazel_testing.Args{
 		Main: `
 -- BUILD.bazel --
-load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary")
 
-go_test(
-    name = "racy_test",
+go_binary(
+    name = "maybe_pure",
     srcs = [
-        "noracy_test.go",
-        "racy_test.go",
+        "not_pure.go",
+        "pure.go",
     ],
-    embed = [":racy"],
 )
 
-go_library(
-    name = "racy",
-    srcs = ["racy.go"],
-    importpath = "example.com/racy",
-)
+-- not_pure.go --
+// +build cgo
 
--- racy.go --
-package racy
+package main
 
 import "fmt"
 
-func Race() {
-	var x int
-	done := make(chan struct{})
-	go func() {
-		x = 1
-		close(done)
-	}()
-	x = 2
-	<-done
-	fmt.Println(x)
+func main() {
+	fmt.Println("not pure")
 }
 
--- racy_test.go --
-// +build race
+-- pure.go --
+// +build !cgo
 
-package racy
+package main
 
-import "testing"
+import "fmt"
 
-func TestRace(t *testing.T) {
-	Race()
+func main() {
+	fmt.Println("pure")
 }
-
--- noracy_test.go --
-// +build !race
-
-package racy
-
-const Does Not = Compile
 `,
 	})
 }
 
-// TestRace checks that the --@io_bazel_rules_go//go/config:race flag controls
-// whether a target is built in race mode.
-func TestRace(t *testing.T) {
-	t.Logf("PATH=%s", os.Getenv("PATH"))
-
-	// The test should not build unless it's in race mode.
-	err := bazel_testing.RunBazel("test", "-s", "//:racy_test")
-	if err == nil {
-		t.Fatal("running //:racy_test without flag: unexpected success")
+// TestPure checks that the --@io_bazel_rules_go//go/config:pure flag controls
+// whether a target is built in pure mode. It doesn't actually require cgo,
+// since that doesn't work within go_bazel_test on Windows.
+func TestPure(t *testing.T) {
+	out, err := bazel_testing.BazelOutput("run", "//:maybe_pure")
+	if err != nil {
+		t.Fatalf("running //:maybe_pure without flag: %v", err)
 	}
-	var xErr *exec.ExitError
-	if !errors.As(err, &xErr) {
-		t.Fatalf("unexpected error (of type %[1]T): %[1]v", err)
-	}
-	if code := xErr.ExitCode(); !xErr.Exited() || code != bazel_testing.BUILD_FAILURE {
-		t.Errorf("running //:racy_test without flag: unexpected error (code %d): %v", code, err)
+	got := string(bytes.TrimSpace(out))
+	if want := "not pure"; got != want {
+		t.Fatalf("got %q; want %q", got, want)
 	}
 
-	// The test should fail in race mode.
-	err = bazel_testing.RunBazel("test", "-s", "--@io_bazel_rules_go//go/config:race", "//:racy_test")
-	if err == nil {
-		t.Fatal("running //:racy_test with flag: unexpected success")
+	out, err = bazel_testing.BazelOutput("run", "--@io_bazel_rules_go//go/config:pure", "//:maybe_pure")
+	if err != nil {
+		t.Fatalf("running //:maybe_pure with flag: %v", err)
 	}
-	if !errors.As(err, &xErr) {
-		t.Fatalf("unexpected error (of type %[1]T): %[1]v", err)
-	}
-	if code := xErr.ExitCode(); !xErr.Exited() || code != bazel_testing.TESTS_FAILED {
-		t.Errorf("running //:racy_test without flag: unexpected error (code %d): %v", code, err)
+	got = string(bytes.TrimSpace(out))
+	if want := "pure"; got != want {
+		t.Fatalf("got %q; want %q", got, want)
 	}
 }
