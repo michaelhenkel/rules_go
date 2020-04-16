@@ -17,7 +17,7 @@ WELL_KNOWN_TYPE_PACKAGES = {
     "type": ("google.golang.org/genproto/protobuf/ptype", ["any", "source_context"]),
     "wrappers": ("github.com/golang/protobuf/ptypes/wrappers", []),
     "runtime": ("google.golang.org/protobuf/runtime", ["protoimpl"]),
-    "protoreflect": ("google.golang.org/protobuf/reflect", ["protoreflect"]),
+    #"protoreflect": ("google.golang.org/protobuf/reflect", ["protoreflect"]),
 }
 
 GOGO_WELL_KNOWN_TYPE_REMAPS = [
